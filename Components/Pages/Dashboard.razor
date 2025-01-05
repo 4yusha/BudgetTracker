@@ -1,0 +1,429 @@
+﻿@page "/dashboard"
+@using BudgetTracker.Components.Model
+@inject UserService UserService
+@inject NavigationManager NavigationManager
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+
+<!-- Dahsboard Page-->
+<div class="dashboard_page">
+    <div class="date_filter_section">
+        <label for="startDate">Start Date:</label>
+        <input type="date" id="startDate" @bind="startDate" />
+
+        <label for="endDate">End Date:</label>
+        <input type="date" id="endDate" @bind="endDate" />
+
+        <button @onclick="Applyfiltration" class="date_filter_button">Filter</button>
+    </div>
+
+    <!--Searching Part-->
+    <div class="search_section">
+        <div class="search_input_container">
+            <i class="fa fa-search search_icon"></i>
+            <input type="text" id="search" @bind="searchQuery" placeholder="Search by title..." />
+        </div>
+    </div>
+
+    <!--For table of transaction-->
+    <div class="main_section">
+        <div class="transaction_table_section">
+            <h2>Highest Transactions</h2>
+            <table class="transaction_table">
+                <thead>
+                    <tr>
+                        <th>Transaction Type</th>
+                        <th>Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Highest Inflow</td>
+                        <td>@HighestInflow.ToString("C")</td>
+                    </tr>
+                    <tr>
+                        <td>Highest Outflow</td>
+                        <td>@HighestOutflow.ToString("C")</td>
+                    </tr>
+                    <tr>
+                        <td>Highest Debt</td>
+                        <td>@HighestDebt.ToString("C")</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="transaction_table_section">
+            <h2>Lowest Transactions</h2>
+            <table class="transaction_table">
+                <thead>
+                    <tr>
+                        <th>Transaction Type</th>
+                        <th>Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Lowest Inflow</td>
+                        <td>@LowestInflow.ToString("C")</td>
+                    </tr>
+                    <tr>
+                        <td>Lowest Outflow</td>
+                        <td>@LowestOutflow.ToString("C")</td>
+                    </tr>
+                    <tr>
+                        <td>Lowest Debt</td>
+                        <td>@LowestDebt.ToString("C")</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!--Summary part-->
+    <div class="summary_section">
+        <h2>Summary</h2>
+        <div class="summary_box">
+            <ul>
+                <li>Total Transactions: @TotalTransactions</li>
+                <li>Current Balance: @CurrentBalance.ToString("C")</li>
+                <li>Total Inflows (Income): @TotalInflows.ToString("C")</li>
+                <li>Total Outflows (Expense): @TotalOutflows.ToString("C")</li>
+                <li>Total Debts: @TotalDebts.ToString("C")</li>
+                <li>Total Remaining Debts: @RemainingDebts.ToString("C")</li>
+            </ul>
+
+        </div>
+    </div>
+
+    <div class="pending_debts_section">
+        <h2>Pending Debts</h2>
+        <div class="table_container">
+            <table class="debts_table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Source</th>
+                        <th>Amount</th>
+                        <th>Due Date</th>
+                        <th>Remaining Amount</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var debt in PendingDebts)
+                    {
+                        <tr>
+                            <td>@debt.Id</td>
+                            <td>@debt.Source</td>
+                            <td>@debt.Amount.ToString("C")</td>
+                            <td>@debt.DueDate?.ToString("MM/dd/yyyy")</td>
+                            <td>@debt.RemainingAmount.ToString("C")</td>
+                            <td>@debt.Status</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div>
+            <button @onclick="AdjustAmounts" class="reset_button">Clear All Amounts</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    private AppData Data;
+    private DateTime? startDate;
+    private DateTime? endDate;
+    private string searchQuery = string.Empty;
+    private String Message;
+
+
+    // Loading initial data and setting up the dashboard
+
+    protected override void OnInitialized()
+    {
+        Data = UserService.DataUpload();
+    }
+
+    // Filtering transactions based on user input
+
+    private IEnumerable<Transaction> TransactionFiltering
+    {
+        get
+        {
+            var query = Data.Transactions.AsEnumerable();
+
+            if (startDate.HasValue)
+                query = query.Where(t => t.Date >= startDate.Value);
+
+            if (endDate.HasValue)
+                query = query.Where(t => t.Date <= endDate.Value);
+
+            if (!string.IsNullOrEmpty(searchQuery))
+                query = query.Where(t => t.Title.Contains(searchQuery, StringComparison.OrdinalIgnoreCase));
+
+            return query;
+        }
+    }
+
+    // Resetting all amounts to default values
+
+    private void AdjustAmounts()
+    {
+        UserService.AdjustAmounts(); 
+        Data = UserService.DataUpload(); 
+        StateHasChanged(); 
+    }
+
+    // Applying date filters and updating the UI
+
+    private void Applyfiltration(DateTime startDate, DateTime endDate) => StateHasChanged();
+
+    // Clearing the date filter and refreshing the view
+
+    private void AdjustDateFiltering()
+    {
+        startDate = null;
+        endDate = null;
+        Applyfiltration();
+    }
+
+
+    private int TotalTransactions => TransactionFiltering.Count();
+    private decimal TotalInflows => TransactionFiltering.Where(t => t.Type == "Credit").Sum(t => t.Credit);
+    private decimal TotalOutflows => TransactionFiltering.Where(t => t.Type == "Debit").Sum(t => t.Debit);
+    private decimal TotalDebts => TransactionFiltering.Where(t => t.Type == "Debt").Sum(t => t.Amount);
+    private decimal ClearedDebts => Data.Debts.Where(d => d.Status == "Paid").Sum(d => d.PaidAmount);
+    private decimal RemainingDebts => Data.Debts.Where(d => d.Status == "Pending").Sum(d => d.RemainingAmount);
+    private decimal CurrentBalance => TotalInflows - TotalOutflows;
+    private decimal HighestInflow => TransactionFiltering.Any(t => t.Type == "Credit") ? TransactionFiltering.Where(t => t.Type == "Credit").Max(t => t.Credit) : 0;
+    private decimal LowestInflow => TransactionFiltering.Any(t => t.Type == "Credit") ? TransactionFiltering.Where(t => t.Type == "Credit").Min(t => t.Credit) : 0;
+    private decimal HighestOutflow => TransactionFiltering.Any(t => t.Type == "Debit") ? TransactionFiltering.Where(t => t.Type == "Debit").Max(t => t.Debit) : 0;
+    private decimal LowestOutflow => TransactionFiltering.Any(t => t.Type == "Debit") ? TransactionFiltering.Where(t => t.Type == "Debit").Min(t => t.Debit) : 0;
+    private decimal HighestDebt => Data.Debts.Any() ? Data.Debts.Max(d => d.Amount) : 0;
+    private decimal LowestDebt => Data.Debts.Any() ? Data.Debts.Min(d => d.Amount) : 0;
+    private IEnumerable<Debt> PendingDebts => Data.Debts.Where(d => d.Status == "Pending");
+
+    private void Applyfiltration() => StateHasChanged();
+
+    // Logging the user out and navigating to the login page
+
+    private void Logout() => NavigationManager.NavigateTo("/"); 
+}
+<style>
+
+    .search_input_container {
+        position: relative;
+        width: 50%;
+        margin-top: -18px;
+    }
+
+        .search_input_container input {
+            padding: 8px 35px 8px 10px;
+            font-size: 1rem;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            width: 50%;
+        }
+
+    .search_icon {
+        position: absolute;
+        left: 200px; 
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 1.2rem;
+        color: #F87171;
+        cursor: pointer;
+    }
+
+
+    .transaction_table_section h2 {
+        margin-top: 40px;
+        color: #F87171;
+    }
+
+    .pending_debts_section h2 {
+        margin-top: 20px;
+        color: #F87171;
+    }
+
+    .dashboard_page {
+        font-family: Arial, sans-serif;
+        padding: 20px;
+        background-color: #f5f5f5;
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+
+    .main_section {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 20px;
+    }
+
+    .transaction_table_section {
+        width: 48%;
+    }
+
+    .transaction_table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+    }
+
+        .transaction_table th, .transaction_table td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+        }
+
+        .transaction_table th {
+            background-color: #f1f1f1;
+        }
+
+    .summary_section {
+        margin-top: 20px;
+        color: #F87171;
+    }
+
+    .summary_box {
+        padding: 15px;
+        background-color: #FFD6D6;
+        border-radius: 8px;
+    }
+
+    ul {
+        list-style-type: none;
+        padding: 0;
+    }
+
+        ul li {
+            margin: 5px 0;
+            font-size: 1.1rem;
+        }
+
+    .table_container {
+        overflow-x: auto;
+        margin-top: 15px;
+    }
+
+    .debts_table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+        .debts_table th, .debts_table td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+        }
+
+        .debts_table th {
+            background-color: #f1f1f1;
+        }
+
+    .logout_button {
+        background-color: #333;
+        color: white;
+        padding: 10px 20px;
+        font-size: 1.2rem;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        margin-top: 20px;
+    }
+
+        .logout_button:hover {
+            background-color: #555;
+        }
+
+    .reset_button {
+        background-color: #F87171;
+        color: white;
+        padding: 10px 20px;
+        font-size: 1rem;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        margin-top: 20px;
+    }
+
+        .reset_button:hover {
+            background-color: #EF4444;
+        }
+
+    .cashout_button {
+        background-color: #F87171;
+        color: white;
+        padding: 10px 20px;
+        font-size: 1rem;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        margin-top: 20px;
+    }
+
+        .cashout_button:hover {
+            background-color: #EF4444;
+        }
+
+    .filter_section {
+        display: flex;
+        gap: 15px;
+        margin-bottom: 20px;
+    }
+
+    label {
+        font-size: 1rem;
+        margin-right: 5px;
+    }
+
+    input[type="date"] {
+        padding: 8px;
+        font-size: 1rem;
+        border-radius: 5px;
+        border: 1px solid #ccc;
+    }
+
+    .date_filter_section {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        display: flex;
+        gap: 15px;
+        align-items: center;
+    }
+
+        .date_filter_section label,
+        .date_filter_section input {
+            font-size: 1rem;
+        }
+
+    .date_filter_button {
+        background-color: #F87171;
+        color: white;
+        padding: 8px 15px;
+        font-size: 1rem;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+    }
+
+        .date_filter_button:hover {
+            background-color: #EF4444;
+        }
+
+    .search_section {
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+    }
+
+        .search_section input {
+            padding: 8px;
+            font-size: 1rem;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+
+</style>

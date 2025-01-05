@@ -1,0 +1,166 @@
+﻿@page "/register"
+@inject UserService UserService
+@inject NavigationManager NavigationManager
+@using BudgetTracker.Components.Layout
+@using BudgetTracker.Components.Model
+@layout FirstLayout
+
+<div class="signup_page">
+    <div class="signup_box">
+        <input @bind="RegisterUsername" placeholder="Username" />
+        <input @bind="RegisterPassword" placeholder="Password" type="password" />
+        <input @bind="RegisterEmail" placeholder="Email" />
+        <button @onclick="RegisterPage">Register</button>
+            <p>Already have an account?<u><a href="/">Login</a></u></p>
+
+        @if (!string.IsNullOrEmpty(Message))
+        {
+          <p>@Message</p>
+        }
+    </div>
+</div>
+
+@code {
+    private string RegisterUsername = "";
+    private string RegisterPassword = "";
+    private string RegisterEmail = "";
+    private string Message = "";
+
+    private List<User> Users = new();
+
+    protected override void OnInitialized()
+    {
+        // Initializing user list by loading existing users from the service
+
+        Users = UserService.UsersUpload();
+    }
+
+    private void RegisterPage()
+    {
+        if (string.IsNullOrWhiteSpace(RegisterUsername) || string.IsNullOrWhiteSpace(RegisterPassword))
+        {
+            Message = "Username and password are required.";
+            return;
+        }
+
+        // Checking if the username already exists
+
+
+        if (Users.Any(u => u.Username == RegisterUsername))
+        {
+            Message = "Username already exists.";
+            return;
+        }
+
+        // Creating a new user and adding it to the user list
+
+        var newUser = new User
+            {
+                Username = RegisterUsername,
+                Password = UserService.PasswordHashing(RegisterPassword),  
+                Email = RegisterEmail
+            };
+
+        // Saving the new user to the service
+
+        Users.Add(newUser);
+        UserService.StoreUsers(Users);
+
+        // Displaying success message and redirecting to the login page
+
+        Message = "Registration successful. Redirecting to login...";
+        Task.Delay(2000).ContinueWith(_ => NavigationManager.NavigateTo("/"));
+    }
+}
+
+<style>
+    html, body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        width: 100%;
+        overflow: hidden;
+    }
+
+    body {
+        background-image: url('/signup_pic.png');
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        background-attachment: fixed;
+    }
+
+    .signup_page {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        padding: 20px;
+    }
+
+    h3 {
+        color: #F87171;
+        font-size: 2rem;
+        margin-bottom: 2rem;
+        font-weight: bold;
+    }
+
+    .signup_box {
+        background-color: rgba(255, 255, 255, 0.6); /* Minimum opacity for the white box */
+        padding: 2rem;
+        border-radius: 20px;
+        box-shadow: 0 4px 6px rgba(248, 113, 113, 0.1);
+        width: 100%;
+        max-width: 400px;
+        text-align: center;
+    }
+
+    input {
+        width: 100%;
+        padding: 12px;
+        margin: 8px 0;
+        border: 2px solid #f0f0f0;
+        border-radius: 30px;
+        font-size: 1rem;
+        background-color: #f7f7f7;
+        transition: border-color 0.3s ease;
+        color: #333;
+    }
+
+        input:focus {
+            outline: none;
+            border-color: #F87171;
+            background-color: #ffffff;
+        }
+
+    button {
+        width: 100%;
+        padding: 12px;
+        background-color: #F87171;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+        margin: 16px 0;
+    }
+
+        button:hover {
+            background-color: #ef4444;
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+    p {
+        color: #F87171;
+        text-align: center;
+        margin-top: 1rem;
+        font-size: 0.9rem;
+    }
+
+
+</style>

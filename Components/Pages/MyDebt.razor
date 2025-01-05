@@ -1,0 +1,366 @@
+﻿@page "/mydebt"
+@using BudgetTracker.Components.Model
+@inject UserService UserService
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet">
+
+<div class="debt_page">
+    <div class="debt_box">
+        <h1>Debts</h1>
+
+        @if (!string.IsNullOrEmpty(Message))
+        {
+            <div class="alert alert-warning">@Message</div>
+        }
+
+        <!-- Filtration Section -->
+        <div class="filtration">
+            <div class="filtering filter_left">
+                <label>Date Range:</label>
+                <div class="fill_date">
+                    <InputDate @bind-Value="startDate" class="alltransaction_check" />
+                    <InputDate @bind-Value="endDate" class="alltransaction_check" />
+                </div>
+            </div>
+
+            <div class="filtering filter_right">
+                <label>Tag:</label>
+                <InputText @bind-Value="tagFilter" placeholder="Filter by tag" class="alltransaction_check" />
+            </div>
+
+            <button @onclick="ApplyingFilters" class="filtration_button">Apply Filters</button>
+        </div>
+
+        <!-- Debt Table -->
+        <div class="debt_table">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Type</th>
+                        <th>Title</th>
+                        <th>Total Amount</th>
+                        <th>Date</th>
+                        <th>Debt Source</th>
+                        <th>Status</th>
+                        <th>Tags</th>
+                        <th>Notes</th>
+                        <th>Paid Amount</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var debt in DebtsFiltering)
+                    {
+                        <tr class="@GDRClass(debt)">
+                            <td>@debt.Id</td>
+                            <td>@debt.GetType().Name</td> <!-- Debt Type -->
+                            <td>@debt.Source</td> <!-- Debt Source -->
+                            <td>@debt.Amount.ToString("C")</td> <!-- Debt Amount -->
+                            <td>@debt.Date.ToString("MM/dd/yyyy")</td>
+                            <td>@debt.Source</td> <!-- Debt Source -->
+                            <td>@debt.Status</td>
+                            <td>@string.Join(", ", debt.Tags)</td>
+                            <td>@debt.Notes</td> <!-- Notes -->
+                            <td class="@GPAClass(debt)">@debt.PaidAmount.ToString("C")</td>
+                            <td>
+                                <button @onclick="() => DeletingDebt(debt)" class="delete_button"><i class="fas fa-trash"></i></button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+        </div>
+
+        <!-- Summary Section -->
+        <div class="summary_section">
+            <div class="summary_box">
+                <div class="total_debt">
+                    <h3>Total Debts</h3>
+                    <p>@TotalDebt.ToString("C")</p>
+                </div>
+                <div class="remaining_debt">
+                    <h3>Remaining Debt</h3>
+                    <p>@RemainingDebt.ToString("C")</p>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+@code {
+    private AppData Data;
+    private string tagFilter = string.Empty;
+    private DateTime? startDate;
+    private DateTime? endDate;
+    private string Message = "";
+
+    private decimal TotalDebt => DebtsFiltering.Sum(d => d.Amount);
+    private decimal RemainingDebt => DebtsFiltering.Sum(d => d.RemainingAmount); // Remaining Debt for Dashboard
+
+    private List<Debt> DebtsFiltering => Data.Debts
+        .Where(d => (string.IsNullOrEmpty(tagFilter) || d.Tags?.Any(t => t.Contains(tagFilter, StringComparison.OrdinalIgnoreCase)) == true) &&
+                    (!startDate.HasValue || d.Date >= startDate) &&
+                    (!endDate.HasValue || d.Date <= endDate))
+        .ToList();
+
+    protected override void OnInitialized()
+    {
+        Data = UserService.DataUpload();
+        foreach (var debt in Data.Debts)
+        {
+            if (debt.PaidAmount >= debt.Amount)
+            {
+                debt.Status = "Paid";
+                debt.RemainingAmount = 0;
+            }
+            else
+            {
+                debt.Status = "Pending";
+                debt.RemainingAmount = debt.Amount - debt.PaidAmount;
+            }
+        }
+    }
+
+
+    // Applying Filtration
+    private void ApplyingFilters()
+    {
+        StateHasChanged();
+    }
+
+    private void DeletingDebt(Debt debt)
+    {
+        Data.Debts.Remove(debt);
+        UserService.StoreData(Data);
+        StateHasChanged();
+    }
+
+    private string GDRClass(Debt debt)
+    {
+        return debt.PaidAmount < debt.Amount ? "pending_debts" : "";
+    }
+
+    private string GPAClass(Debt debt)
+    {
+        return debt.PaidAmount < debt.Amount ? "highlight_paid_amount" : "";
+    }
+
+
+    private void AddingTransaction(Debt debt, decimal amount, string notes, string newTag = "")
+    {
+        var newTransact = new Transaction
+            {
+                DebtId = debt.Id,
+                Amount = amount,
+                Date = DateTime.Now
+            };
+
+        // Adding the transaction
+        Data.Transactions.Add(newTransact);
+
+        // If a new tag is provided, update the debt's tag list
+        if (!string.IsNullOrEmpty(newTag))
+        {
+            if (debt.Tags == null)
+            {
+                debt.Tags = new List<string>();
+            }
+            debt.Tags.Add(newTag);  // Add new tag to the debt
+        }
+
+        // Updating debt's notes and status
+        debt.Notes = notes;
+        DebtStatusUpdation(debt);
+    }
+
+    private void DebtStatusUpdation(Debt debt)
+    {
+        // Calculate the total paid amount
+        debt.PaidAmount = Data.Transactions
+            .Where(t => t.DebtId == debt.Id)
+            .Sum(t => t.Amount);
+
+        // Updating the status based on the paid amount
+        if (debt.PaidAmount >= debt.Amount)
+        {
+            debt.Status = "Paid";
+            debt.RemainingAmount = 0;
+        }
+        else
+        {
+            debt.Status = "Pending";
+            debt.RemainingAmount = debt.Amount - debt.PaidAmount;
+        }
+
+        // Saving the updated debt data
+        UserService.StoreDebts(Data.Debts);
+
+        // Triggering UI update
+        StateHasChanged();
+    }
+}
+
+<style>
+    .highlight_paid_amount {
+        background-color: #ff9a9a; 
+        color: white;
+    }
+
+    .pending_debts {
+        background-color: #fec1c1;
+        color: white;
+    }
+
+
+    .debt_page h1 {
+        color: #FF746C;
+        text-align: center;
+    }
+
+    .debt_box {
+        padding: 20px;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        background-color: #ffffff;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        max-width: 1200px;
+        margin: 20px auto;
+    }
+
+    .filtration {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+        margin-bottom: 20px;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .filtering {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .filter_left {
+        flex: 1;
+    }
+
+    .filter_right {
+        flex: 1;
+        text-align: right;
+    }
+
+    .filtering label {
+        font-weight: bold;
+        color: #555555;
+    }
+
+    .fill_date {
+        display: flex;
+        gap: 10px;
+    }
+
+    .alltransaction_check {
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        font-size: 14px;
+        width: 150px;
+    }
+
+    .filtration_button {
+        padding: 10px 15px;
+        background-color: #F87171;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+    }
+
+        .filtration_button:hover {
+            background-color: #ff9a9a;
+        }
+
+    .debt_table {
+        margin-top: 20px;
+        overflow-x: auto;
+    }
+
+    .table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+        .table th, .table td {
+            padding: 10px;
+            text-align: left;
+            border: 1px solid #ccc;
+            color: #333; /* Ensure text color is dark for readability */
+        }
+
+        .table th {
+            background-color: #f5f5f5;
+            color: #333333;
+        }
+
+        .table tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+    .delete_button {
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: #F87171;
+        font-size: 1.2rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+        .delete_button:hover {
+            color: #ff4d4d;
+        }
+
+    .summary_section {
+        margin-top: 20px;
+        display: flex;
+        justify-content: center;
+    }
+
+    .summary_box {
+        display: flex;
+        gap: 20px;
+        padding: 20px;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        background-color: #f9f9f9;
+        width: 100%;
+        justify-content: space-between;
+    }
+
+        .summary_box div {
+            text-align: center;
+            flex: 1;
+            padding: 10px;
+            border-radius: 5px;
+            background-color: #ffffff;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .summary_box h3 {
+            font-size: 1.2rem;
+            color: #555555;
+            margin-bottom: 10px;
+        }
+
+        .summary_box p {
+            font-size: 1.5rem;
+            color: #333333;
+            font-weight: bold;
+        }
+</style>

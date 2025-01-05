@@ -1,0 +1,485 @@
+﻿@page "/alltransactions"
+@using BudgetTracker.Components.Model
+@inject UserService UserService
+@inject NavigationManager NavigationManager
+
+<div class="transaction_page">
+    <div class="transaction_box">
+        <!--For message display-->
+
+        @if (isSuccess)
+        {
+            <p class="success_message">@Message</p>
+        }
+        else if (!string.IsNullOrEmpty(Message))
+        {
+            <div class="alert_warning_message">@Message</div>
+        }
+
+        <!-- Form for adding new transaction -->
+        <h2>Add New Transaction</h2>
+        <EditForm Model="newTransact" OnValidSubmit="HandlingTransactSubmit">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+
+            <!-- Form for fields -->
+
+            <div class="transaction_form">
+                <label for="transactionType">Transaction Type</label>
+                <InputSelect id="transactionType" @bind-Value="newTransact.Type" class="alltransaction_check" @onchange="OnTransactionTypeChanged">
+                    <option value="">Select Type</option>
+                    <option value="Credit">Credit</option>
+                    <option value="Debit">Debit</option>
+                    <option value="Debt">Debt</option>
+                </InputSelect>
+            </div>
+
+            <div class="transaction_form">
+                <label for="title">Title</label>
+                <InputText id="title" @bind-Value="newTransact.Title" class="alltransaction_check" />
+            </div>
+
+            <div class="transaction_form">
+                <label for="amount">Amount</label>
+                <InputNumber id="amount" @bind-Value="newTransact.Amount" class="alltransaction_check" />
+            </div>
+
+            <div class="transaction_form">
+                <label for="date">Date</label>
+                <InputDate id="date" @bind-Value="newTransact.Date" class="alltransaction_check" />
+            </div>
+
+            <!-- Conditional fields for Debt transactions-->
+
+            @if (newTransact.Type == "Debt")
+            {
+                <div class="transaction_form">
+                    <label for="debtSource">Debt Source</label>
+                    <InputText id="debtSource" @bind-Value="newDebtSource" class="alltransaction_check" placeholder="e.g. Loan, Credit Card" />
+                </div>
+
+                <div class="transaction_form">
+                    <label for="status">Status</label>
+                    <InputSelect id="status" @bind-Value="newDebtStatus" class="alltransaction_check">
+                        <option value="Pending">Pending</option>
+                        <option value="Paid">Paid</option>
+                    </InputSelect>
+                </div>
+
+                <div class="transaction_form">
+                    <label for="paidAmount">Paid Amount</label>
+                    <InputNumber id="paidAmount" @bind-Value="newPaidAmount" class="alltransaction_check" />
+                </div>
+            }
+
+            <!-- Section for adding tags -->
+
+            <div class="transaction_form">
+                <label for="tags">Tags</label>
+                <div class="tag_selection">
+                    <div class="custom_tag_input">
+                        <InputText id="customTag"
+                                   @bind-Value="newCustomTag"
+                                   placeholder="Add custom tag"
+                                   class="alltransaction_check" />
+                        <button type="button" class="add_tag_button" @onclick="AddingCustomTag">Add Tag</button>
+                    </div>
+                </div>
+
+                @if (selectedTags != null && selectedTags.Any())
+                {
+                    <div class="selected_tags">
+                        @foreach (var tag in selectedTags)
+                        {
+                            <span class="tag">
+                                @tag
+                                <button type="button" class="remove_tag" @onclick="() => RemovingTag(tag)">×</button>
+                            </span>
+                        }
+                    </div>
+                }
+            </div>
+
+
+            <div class="transaction_form">
+                <label for="notes">Notes</label>
+                <InputTextArea id="notes" @bind-Value="newTransact.Notes" class="alltransaction_check" />
+            </div>
+
+            <div class="buttons">
+                <button type="submit" class="save_button">Save Transaction</button>
+                <button type="button" class="cancel_button" @onclick="Cancel">Cancel</button>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    // State properties for managing the transaction data and form
+
+    private int CurrentUserID { get; set; }
+    private string Message = string.Empty;
+    private Transaction newTransact;
+    private string selectedTag = string.Empty;
+    private AppData Data;
+    private bool isSuccess = false;
+    private string newCustomTag = string.Empty;
+    private List<string> customTags;
+    private List<string> selectedTags;
+    private string newDebtSource = string.Empty;
+    private string newDebtStatus = "Pending";
+    private decimal newPaidAmount = 0m;
+
+    protected override void OnInitialized()
+    {
+        // Initializing states for transaction and tags
+
+        customTags = new List<string>();
+        selectedTags = new List<string>();
+
+        newTransact = new Transaction
+            {
+                Date = DateTime.Now,
+                UserID = CurrentUserID,
+                Tags = new List<string>()
+            };
+
+        Data = UserService.DataUpload() ?? new AppData();
+    }
+
+    // Event handler for handling transaction
+
+    private void OnTransactionTypeChanged(ChangeEventArgs e)
+    {
+        if (newTransact.Type != "Debt")
+        {
+            newDebtSource = string.Empty;
+            newDebtStatus = "Pending";
+            newPaidAmount = 0m; // Clear paid amount when not a debt
+        }
+    }
+
+    // Adding custom tag to the list
+
+    private void AddingCustomTag()
+    {
+        if (string.IsNullOrWhiteSpace(newCustomTag))
+            return;
+
+        if (customTags == null)
+            customTags = new List<string>();
+
+        var normalizedNewTag = newCustomTag.Trim();
+
+        if (!customTags.Contains(normalizedNewTag, StringComparer.OrdinalIgnoreCase))
+        {
+            customTags.Add(normalizedNewTag);
+            AddingSelectedTag(normalizedNewTag);
+            newCustomTag = string.Empty;
+            StateHasChanged();
+        }
+    }
+
+    // Adding selected tag to the list
+
+    private void AddingSelectedTag(string tag)
+    {
+        if (string.IsNullOrWhiteSpace(tag))
+            return;
+
+        if (selectedTags == null)
+            selectedTags = new List<string>();
+
+        if (!selectedTags.Contains(tag, StringComparer.OrdinalIgnoreCase))
+        {
+            selectedTags.Add(tag);
+            selectedTag = string.Empty;
+            StateHasChanged();
+        }
+    }
+
+    // Removing a selected tag
+    private void RemovingTag(string tag)
+    {
+        if (selectedTags != null && !string.IsNullOrWhiteSpace(tag))
+        {
+            selectedTags.Remove(tag);
+            StateHasChanged();
+        }
+    }
+
+
+    // Handling the transaction submission
+
+    private async void HandlingTransactSubmit()
+    {
+        if (newTransact.Amount <= 0)
+        {
+            Message = "Amount should be greater than zero.";
+            isSuccess = false;
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        if (newTransact.Tags == null)
+        {
+            newTransact.Tags = new List<string>();
+        }
+
+        if (selectedTags != null && selectedTags.Any())
+        {
+            newTransact.Tags.Clear();
+            newTransact.Tags.AddRange(selectedTags);
+        }
+
+
+        if (newTransact.Type == "Credit")
+        {
+            newTransact.Credit = newTransact.Amount;
+            newTransact.Debit = 0;
+            Data.Transactions.Add(newTransact);
+            UserService.StoreData(Data);
+            Message = "Credit transaction added successfully!";
+            isSuccess = true;
+        }
+        else if (newTransact.Type == "Debit")
+        {
+            var userTransactions = Data.Transactions.Where(t => t.UserID == CurrentUserID).ToList();
+            decimal currentBalance = userTransactions.Sum(t => t.Credit - t.Debit);
+
+            if (currentBalance < newTransact.Amount)
+            {
+                Message = "Insufficient balance for this transaction.";
+                isSuccess = false;
+            }
+            else
+            {
+                newTransact.Debit = newTransact.Amount;
+                newTransact.Credit = 0;
+                Data.Transactions.Add(newTransact);
+                UserService.StoreData(Data);
+                Message = "Debit transaction added successfully!";
+                isSuccess = true;
+            }
+        }
+        else if (newTransact.Type == "Debt")
+        {
+            // Handling debt data
+            var newDebt = new Debt
+                {
+                    UserID = CurrentUserID,
+                    Source = newDebtSource,
+                    Amount = newTransact.Amount,
+                    Status = newDebtStatus,
+                    Tags = newTransact.Tags,
+                    Notes = newTransact.Notes  // Add Notes here
+                };
+
+            // Applying paid amount logic 
+            if (newPaidAmount >= newDebt.Amount)
+            {
+                newDebt.Status = "Paid";
+                newDebt.RemainingAmount = 0;
+                newDebt.PaidAmount = newDebt.Amount; 
+            }
+            else
+            {
+                newDebt.Status = "Pending";
+                newDebt.RemainingAmount = newDebt.Amount - newPaidAmount;
+                newDebt.PaidAmount = newPaidAmount; 
+            }
+
+            // Add debt to data
+            Data.Debts.Add(newDebt);
+            UserService.StoreData(Data);
+
+            Message = "Debt transaction added successfully!";
+            isSuccess = true;
+
+            // Refresh the page after transaction submission
+
+            await Task.Delay(3000); 
+            NavigationManager.NavigateTo("/mydebt");
+        }
+
+
+        await InvokeAsync(StateHasChanged);
+
+        if (isSuccess)
+        {
+            await Task.Delay(3000);
+            NavigationManager.NavigateTo(newTransact.Type == "Credit" ? "/cashin" : "/cashout");
+        }
+    }
+
+    // Cancelling and navigate to the appropriate page
+
+    private void Cancel()
+    {
+        NavigationManager.NavigateTo(newTransact.Type switch
+        {
+            "Debit" => "/cashout",
+            "Credit" => "/cashin",
+            "Debt" => "/mydebt",
+            _ => "/alltransactions"
+        });
+    }
+}
+
+<!--Styles for transaction page and form layout-->
+
+<style>
+    .transaction_page {
+        font-family: Arial, sans-serif;
+        padding: 20px;
+        background-color: #f9f9f9;
+        max-width: 600px;
+        margin: 0 auto;
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .transaction_box {
+        background-color: #ffffff;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+        .transaction_box h2 {
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+            color: #F87171;
+            text-align: center;
+        }
+
+    .transaction_form {
+        margin-bottom: 15px;
+    }
+
+        .transaction_form label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555555;
+        }
+
+    .alltransaction_check {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #cccccc;
+        border-radius: 5px;
+        font-size: 1rem;
+        background-color: #ffffff;
+        color: #333333;
+    }
+
+        .alltransaction_check:focus {
+            border-color: #F87171;
+            outline: none;
+            box-shadow: 0 0 3px rgba(248, 113, 113, 0.5);
+        }
+
+    .tag_selection {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .custom_tag_input {
+        display: flex;
+        gap: 10px;
+    }
+
+    .add_tag_button {
+        padding: 10px 20px;
+        background-color: #F87171;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+    }
+
+        .add_tag_button:hover {
+            background-color: #ff9a9a;
+        }
+
+    .selected_tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 10px;
+    }
+
+    .tag {
+        background-color: #f3f4f6;
+        padding: 4px 8px;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .remove_tag {
+        background: none;
+        border: none;
+        color: #666;
+        cursor: pointer;
+        padding: 0 4px;
+        font-size: 16px;
+    }
+
+        .remove_tag:hover {
+            color: #F87171;
+        }
+
+    .buttons {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 20px;
+    }
+
+    .save_button, .cancel_button {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 5px;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+    }
+
+    .save_button {
+        background-color: #F87171;
+        color: #ffffff;
+    }
+
+        .save_button:hover {
+            background-color: #ff9a9a;
+        }
+
+    .cancel_button {
+        background-color: #eeeeee;
+        color: #555555;
+    }
+
+        .cancel_button:hover {
+            background-color: #dddddd;
+        }
+
+    .success_message {
+        color: #28a745;
+        font-size: 1rem;
+        font-weight: bold;
+        margin-bottom: 15px;
+        text-align: center;
+    }
+
+    .alert_warning_message {
+        color: #dc3545;
+        font-size: 1rem;
+        font-weight: bold;
+        margin-bottom: 15px;
+        text-align: center;
+    }
+</style>

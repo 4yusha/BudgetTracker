@@ -1,0 +1,175 @@
+﻿@page "/"
+@inject UserService UserService
+@inject NavigationManager NavigationManager
+@using BudgetTracker.Components.Layout
+@using BudgetTracker.Components.Model
+@layout FirstLayout
+
+<style></style>
+
+<div class="login_page">
+    <div class="login_box">
+        <input @bind="LoginUsername" placeholder="Username" />
+        <input @bind="LoginPassword" placeholder="Password" type="password" />
+        <button @onclick="LoginPage">Login</button>
+        <p>Don't have an account yet?<u><a href="/Register">Sign up</a></u></p>
+
+
+        @if (!string.IsNullOrEmpty(Message))
+        {
+            <p>@Message</p>
+        }
+    </div>
+</div>
+
+@code {
+    private string LoginUsername = "";
+    private string LoginPassword = "";
+    private string Message = "";
+    private AppData data;
+
+
+    // Initializing the component and loading user data
+
+    protected override void OnInitialized()
+    {
+        var userService = new UserService();
+
+        data = userService.DataUpload();
+
+       
+        var users = data.Users;
+    }
+
+    // Handling the login process
+
+    private void LoginPage()
+    {
+        // Finding the user based on the entered username
+
+        var user = data.Users.FirstOrDefault(u => u.Username == LoginUsername);
+
+        // Validating the user's password
+
+        if (user != null && UserService.AuthenticatePassword(LoginPassword, user.Password))
+        {
+            // Redirecting to the dashboard if login is successful
+
+            NavigationManager.NavigateTo("/dashboard");
+        }
+        else
+        {
+            // Displaying an error message for invalid credentials
+
+            Message = "Invalid username or password.";
+        }
+    }
+}
+
+<style>
+    html, body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        width: 100%;
+        overflow: hidden;
+    }
+
+    body {
+        background-image: url('/login_pic.png');
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        background-attachment: fixed;
+    }
+
+    .login_page {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        width: 100vw;
+    }
+
+    .login_box {
+        background-color: rgba(255, 255, 255, 0.6);
+        padding: 2rem;
+        border-radius: 20px;
+        box-shadow: 0 4px 6px rgba(248, 113, 113, 0.1);
+        width: 100%;
+        max-width: 400px;
+        text-align: center;
+    }
+
+    h3 {
+        color: #F87171;
+        font-size: 2rem;
+        margin-bottom: 2rem;
+        font-weight: bold;
+    }
+
+    input {
+        width: 100%;
+        padding: 12px;
+        margin: 8px 0;
+        border: 2px solid #f0f0f0;
+        border-radius: 30px;
+        font-size: 1rem;
+        background-color: #f7f7f7;
+        transition: border-color 0.3s ease;
+        color: #333;
+    }
+
+        input:focus {
+            outline: none;
+            border-color: #F87171;
+            background-color: #ffffff;
+        }
+
+    button {
+        width: 100%;
+        padding: 12px;
+        background-color: #F87171;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+        margin: 16px 0;
+    }
+
+        button:hover {
+            background-color: #ef4444;
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+    a {
+        color: #F87171;
+        text-decoration: none;
+        font-size: 0.9rem;
+        display: block;
+        text-align: center;
+        margin-top: 1rem;
+        transition: color 0.3s ease;
+    }
+
+        a:hover {
+            color: #ef4444;
+            text-decoration: underline;
+        }
+
+    p {
+        color: #F87171;
+        text-align: center;
+        margin-top: 1rem;
+        font-size: 0.9rem;
+    }
+
+</style>
+
+
+

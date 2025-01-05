@@ -1,0 +1,260 @@
+﻿@page "/cashin"
+@using BudgetTracker.Components.Model
+@inject UserService UserService
+@inject NavigationManager NavigationManager
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet">
+
+<!--Cashin Page-->
+<div class="cashin_page">
+    <div class="cashin_box">
+        <h1>Cash In Transactions</h1>
+
+        <!--Filtration Section-->
+        <div class="filtration">
+            <div class="filtering">
+                <label>Date Range:</label>
+                <input type="date" @bind="startDate" />
+                <input type="date" @bind="endDate" />
+            </div>
+
+
+            <div class="filtering">
+                <label>Tags:</label>
+                <input type="text" @bind="filterTag" placeholder="Filter by tag" />
+            </div>
+
+            <button @onclick="Applyfiltration" class="filter_button">Filter</button>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Current Balance</th>
+                        <th>Type</th>
+                        <th>Title</th>  
+                        <th>Amount</th>
+                        <th>Date</th>
+                        <th>Tags</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var transaction in TransactionFiltering)
+                    {
+                        <tr>
+                            <td>@transaction.Id</td>
+                            <td>@CalculatingBalance(transaction)</td>
+                            <td>@transaction.Type</td>
+                            <td>@transaction.Title</td> 
+                            <td> @transaction.Credit</td>
+                            <td>@transaction.Date.ToString("MM/dd/yyyy")</td>
+                            <td>@string.Join(", ", transaction.Tags)</td>
+
+                            <td>
+                                <button @onclick="() => DeletingTransaction(transaction)" class="delete_button">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <button @onclick="AddnewTransact" class="add_button">Add New Transaction</button>
+    </div>
+</div>
+
+@code {
+    [CascadingParameter]
+    private int CurrentUserID { get; set; }
+    private AppData Data;
+    private DateTime? startDate;
+    private DateTime? endDate;
+    private string selectedType = "Credit";  
+    private string filterTag = "";
+
+    // ing Loading the data when the component initializes
+
+
+    protected override void OnInitialized()
+    {
+        Data = UserService.DataUpload();
+    }
+
+    // Filtering transactions based on the current user and selected criteria
+
+    private IEnumerable<Transaction> TransactionFiltering
+    {
+        get
+        {
+            var query = Data.Transactions
+                .Where(t => t.UserID == CurrentUserID && t.Type == "Credit") 
+                .AsEnumerable();
+
+
+            if (startDate.HasValue)
+                query = query.Where(t => t.Date >= startDate.Value);
+
+            if (endDate.HasValue)
+                query = query.Where(t => t.Date <= endDate.Value);
+
+            if (!string.IsNullOrEmpty(filterTag))
+                query = query.Where(t => t.Tags.Any(tag => tag.Contains(filterTag, StringComparison.OrdinalIgnoreCase)));
+
+            return query.OrderByDescending(t => t.Date);
+        }
+    }
+
+    // Calculating the balance up to a specific transaction
+
+
+    private decimal CalculatingBalance(Transaction transaction)
+    {
+        var previousTransactions = Data.Transactions
+            .Where(t => t.UserID == CurrentUserID && t.Id <= transaction.Id)
+            .ToList();
+
+        // Summing up credits and debits for the balance calculation
+
+        decimal balance = previousTransactions.Sum(t => t.Credit - t.Debit);
+        return balance;
+    }
+
+
+    //Triggering UI updates after applyig filters
+
+    private void Applyfiltration() => StateHasChanged();
+
+    private void AddnewTransact() => NavigationManager.NavigateTo("/alltransactions");
+
+    // Deleting a transaction
+
+    private void DeletingTransaction(Transaction transaction)
+    {
+        if (transaction.UserID != CurrentUserID) return;
+
+        // Removing the transaction from the data and saving the updated state
+
+        Data.Transactions.Remove(transaction);
+        UserService.StoreData(Data);
+        StateHasChanged();
+    }
+}
+
+<style>
+    .cashin_page {
+        margin: 20px auto;
+        font-family: Arial, sans-serif;
+        max-width: 1200px;
+    }
+
+    .cashin_box {
+        padding: 20px;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        background-color: #ffffff;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+        .cashin_box h1 {
+            margin-bottom: 20px;
+            font-size: 1.8rem;
+            text-align: center;
+            color: #F87171;
+        }
+
+    .filtration {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+        margin-bottom: 20px;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .filtering {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+        .filtering label {
+            font-weight: bold;
+            color: #555555;
+        }
+
+    .filter_button {
+        padding: 10px 15px;
+        background-color: #F87171;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+    }
+
+        .filter_button:hover {
+            background-color: #ff9a9a;
+        }
+
+    .table-responsive {
+        margin-top: 20px;
+        overflow-x: auto;
+    }
+
+    .table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+        .table th, .table td {
+            padding: 10px;
+            text-align: left;
+            border: 1px solid #ccc;
+        }
+
+        .table th {
+            background-color: #f5f5f5;
+            color: #333333;
+        }
+
+        .table tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+    .delete_button {
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 5px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #F87171;
+        font-size: 1.2rem;
+    }
+
+        .delete_button:hover {
+            color: #ff4d4d;
+        }
+
+    .add_button {
+        display: block;
+        margin: 20px auto 0;
+        padding: 10px 20px;
+        background-color: #F87171;
+        color: #ffffff;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        text-align: center;
+        transition: background-color 0.3s ease;
+    }
+
+        .add_button:hover {
+            background-color: #ff9a9a;
+        }
+</style>
