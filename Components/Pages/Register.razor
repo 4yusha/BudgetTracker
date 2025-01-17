@@ -7,15 +7,23 @@
 
 <div class="signup_page">
     <div class="signup_box">
+        <h3>Sign Up</h3>
         <input @bind="RegisterUsername" placeholder="Username" />
         <input @bind="RegisterPassword" placeholder="Password" type="password" />
         <input @bind="RegisterEmail" placeholder="Email" />
+        <select @bind="SelectedCurrency">
+            <option value="">Select Currency</option>
+            @foreach (var currency in Currencies)
+            {
+                <option value="@currency.Key">@currency.Value</option>
+            }
+        </select>
         <button @onclick="RegisterPage">Register</button>
-            <p>Already have an account?<u><a href="/">Login</a></u></p>
+        <p>Already have an account?<u><a href="/">Login</a></u></p>
 
         @if (!string.IsNullOrEmpty(Message))
         {
-          <p>@Message</p>
+            <p class="message">@Message</p>
         }
     </div>
 </div>
@@ -24,55 +32,69 @@
     private string RegisterUsername = "";
     private string RegisterPassword = "";
     private string RegisterEmail = "";
+    private string SelectedCurrency = "USD";
     private string Message = "";
-
+    private Dictionary<string, string> Currencies = new();
     private List<User> Users = new();
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        // Initializing user list by loading existing users from the service
-
+        // Initializing with specific currencies for Nepal, Australia, and India
+        InitializeCurrencies();
         Users = UserService.UsersUpload();
     }
 
-    private void RegisterPage()
+    private void InitializeCurrencies()
     {
-        if (string.IsNullOrWhiteSpace(RegisterUsername) || string.IsNullOrWhiteSpace(RegisterPassword))
+        Currencies = new Dictionary<string, string>
         {
-            Message = "Username and password are required.";
-            return;
-        }
+            { "NPR", "Nepal (NPR)" },
+            { "INR", "India (INR)" },
+            { "USD", "United States (USD)" },
 
-        // Checking if the username already exists
-
-
-        if (Users.Any(u => u.Username == RegisterUsername))
+        };
+    }
+    @code {
+        private void RegisterPage()
         {
-            Message = "Username already exists.";
-            return;
-        }
+            if (string.IsNullOrWhiteSpace(RegisterUsername) || string.IsNullOrWhiteSpace(RegisterPassword) || string.IsNullOrWhiteSpace(SelectedCurrency))
+            {
+                Message = "All fields, including currency, are required.";
+                return;
+            }
 
-        // Creating a new user and adding it to the user list
+            if (Users.Any(u => u.Username == RegisterUsername))
+            {
+                Message = "Username already exists.";
+                return;
+            }
 
-        var newUser = new User
+            var newUser = new User
             {
                 Username = RegisterUsername,
-                Password = UserService.PasswordHashing(RegisterPassword),  
-                Email = RegisterEmail
+                Password = UserService.PasswordHashing(RegisterPassword),
+                Email = RegisterEmail,
+                PreferredCurrency = SelectedCurrency
             };
 
-        // Saving the new user to the service
+            Users.Add(newUser);
+            UserService.StoreUsers(Users);
 
-        Users.Add(newUser);
-        UserService.StoreUsers(Users);
+            // Setting the preferred currency in the UserService
+            UserService.PreferredCurrency = SelectedCurrency;
 
-        // Displaying success message and redirecting to the login page
-
-        Message = "Registration successful. Redirecting to login...";
-        Task.Delay(2000).ContinueWith(_ => NavigationManager.NavigateTo("/"));
+            Message = "Registration successful. Redirecting to login...";
+            Task.Delay(2000).ContinueWith(_ => NavigationManager.NavigateTo("/"));
+        }
     }
+
+        private class CurrencyResponse
+        {
+    public Dictionary<string, string> Symbols { get; set; } = new();
+        }
 }
 
+<!--Styles for register page-->
 <style>
     html, body {
         margin: 0;
@@ -99,15 +121,8 @@
         padding: 20px;
     }
 
-    h3 {
-        color: #F87171;
-        font-size: 2rem;
-        margin-bottom: 2rem;
-        font-weight: bold;
-    }
-
     .signup_box {
-        background-color: rgba(255, 255, 255, 0.6); /* Minimum opacity for the white box */
+        background-color: rgba(255, 255, 255, 0.8); /* Increase opacity for better readability */
         padding: 2rem;
         border-radius: 20px;
         box-shadow: 0 4px 6px rgba(248, 113, 113, 0.1);
@@ -116,7 +131,14 @@
         text-align: center;
     }
 
-    input {
+    h3 {
+        color: #F87171;
+        font-size: 2rem;
+        margin-bottom: 2rem;
+        font-weight: bold;
+    }
+
+    input, select {
         width: 100%;
         padding: 12px;
         margin: 8px 0;
@@ -128,7 +150,7 @@
         color: #333;
     }
 
-        input:focus {
+        input:focus, select:focus {
             outline: none;
             border-color: #F87171;
             background-color: #ffffff;
@@ -162,5 +184,10 @@
         font-size: 0.9rem;
     }
 
-
+    .message {
+        color: #ef4444;
+        font-weight: bold;
+        text-align: center;
+        margin-top: 1rem;
+    }
 </style>

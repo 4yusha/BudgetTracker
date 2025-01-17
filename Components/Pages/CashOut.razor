@@ -5,8 +5,8 @@
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet">
 
 
-<div class="transaction_page">
-    <div class="transaction_box">
+<div class="cashout_page">
+    <div class="cashout_box">
         <h1>Cash Out Transactions</h1>
 
         <!-- Message Display -->
@@ -20,14 +20,14 @@
             <div class="filtering">
                 <label>Date Range:</label>
                 <div class="fill_date">
-                    <InputDate @bind-Value="startDate" class="alltransaction_check" />
-                    <InputDate @bind-Value="endDate" class="alltransaction_check" />
+                    <InputDate @bind-Value="startDate" class="cashout_check" />
+                    <InputDate @bind-Value="endDate" class="cashout_check" />
                 </div>
             </div>
 
             <div class="filtering">
                 <label>Tags:</label>
-                <InputText @bind-Value="filterTag" placeholder="filtration by tag" class="alltransaction_check" />
+                <InputText @bind-Value="filterTag" placeholder="filtration by tag" class="cashout_check" />
             </div>
 
             <button @onclick="Applyfiltration" class="filtration_button">Filter</button>
@@ -54,8 +54,8 @@
                     {
                         <tr>
                             <td>@transaction.Id</td>
-                            <td>@CurrentBalance.ToString("C")</td>
-                            <td>@transaction.Debit.ToString("C")</td>
+                            <td>@CurrentBalance</td>
+                            <td>@transaction.Debit</td>
                             <td>@transaction.Date.ToString("MM/dd/yyyy")</td>
                             <td>@transaction.Type</td>
                             <td>@transaction.Title</td>
@@ -71,23 +71,9 @@
                 </tbody>
             </table>
         </div>
-
-        <!-- Summary Section -->
-        <div class="summary_section">
-            <div class="summary_box">
-                <div class="total_debit">
-                    <h3>Total Cash Out</h3>
-                    <p>@TotalDebit.ToString("C")</p>
-                </div>
-                <div class="current_balance">
-                    <h3>Current Balance</h3>
-                    <p>@CurrentBalance.ToString("C")</p>
-                </div>
-            </div>
-        </div>
+        <button @onclick="AddnewTransact" class="add_button">Add New Transaction</button>
     </div>
 </div>
-
 @code {
     private int CurrentUserID { get; set; }
     private Transaction newTransact = new Transaction { Type = "Debit" };
@@ -96,27 +82,24 @@
     private DateTime? startDate;
     private DateTime? endDate;
     private string filterTag = "";
-
     private decimal TotalDebit => filtrationedDebitTransactions.Sum(t => t.Debit);
     private decimal CurrentBalance => Data.Transactions
-        .Where(t => t.UserID == CurrentUserID)
+        .Where(t => t.UserID == CurrentUserID) 
         .Sum(t => t.Credit - t.Debit);
 
     // Loading initial user data on component initialization
-
     protected override void OnInitialized()
     {
         Data = UserService.DataUpload();
     }
 
-    // Filtering debit transactions 
-
+    // Filtering debit transactions based on user ID, date range, and tag
     private IEnumerable<Transaction> filtrationedDebitTransactions
     {
         get
         {
             var query = Data.Transactions
-                .Where(t => t.UserID == CurrentUserID && t.Type == "Debit");
+                .Where(t => t.UserID == CurrentUserID && t.Type == "Debit");  // Corrected to filter by CurrentUserID
 
             if (startDate.HasValue)
                 query = query.Where(t => t.Date >= startDate.Value);
@@ -136,36 +119,36 @@
     {
         StateHasChanged();
     }
+    private void AddnewTransact() => NavigationManager.NavigateTo("/alltransactions");
 
-    //  Deleting a transaction
+
+    // Deleting a transaction
     private void DeletingTransaction(Transaction transaction)
     {
-        // Verify user owns this transaction
-        if (transaction.UserID != CurrentUserID)
+        // Verifying user owns this transaction
+        if (transaction.UserID != CurrentUserID)  
         {
+            Message = "You cannot delete a transaction that does not belong to you.";
+            StateHasChanged();
             return;
         }
         Data.Transactions.Remove(transaction);
 
         // Saving updated transaction data
-
         UserService.StoreData(Data);
         StateHasChanged();
     }
 }
 
+<!--Styles for cashout page-->
 <style>
-
-    transaction_box h1{
-        color: #F87171
-    }
-    .transaction_page {
+    .cashout_page {
         margin: 20px auto;
         font-family: Arial, sans-serif;
         max-width: 1200px;
     }
 
-    .transaction_box {
+    .cashout_box {
         padding: 20px;
         border: 1px solid #ccc;
         border-radius: 8px;
@@ -173,11 +156,10 @@
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     }
 
-        .transaction_box h1 {
+        .cashout_box h1 {
             margin-bottom: 20px;
-            font-size: 1.8rem;
             text-align: center;
-            color: #333333;
+            color: #FF746C;
         }
 
     .alert {
@@ -215,7 +197,7 @@
         gap: 10px;
     }
 
-    .alltransaction_check {
+    .cashout_check {
         padding: 8px;
         border: 1px solid #ccc;
         border-radius: 5px;
@@ -277,42 +259,21 @@
             color: #ff4d4d;
         }
 
-    .summary_section {
-        margin-top: 20px;
-        display: flex;
-        justify-content: center;
+         .add_button {
+        display: block;
+        margin: 20px auto 0;
+        padding: 10px 20px;
+        background-color: #F87171;
+        color: #ffffff;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        text-align: center;
+        transition: background-color 0.3s ease;
     }
 
-    .summary_box {
-        display: flex;
-        gap: 20px;
-        padding: 20px;
-        border: 1px solid #ccc;
-        border-radius: 8px;
-        background-color: #f9f9f9;
-        width: 100%;
-        justify-content: space-between;
-    }
-
-        .summary_box div {
-            text-align: center;
-            flex: 1;
-            padding: 10px;
-            border-radius: 5px;
-            background-color: #ffffff;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-
-        .summary_box h3 {
-            font-size: 1.2rem;
-            color: #555555;
-            margin-bottom: 10px;
-        }
-
-        .summary_box p {
-            font-size: 1.5rem;
-            color: #333333;
-            font-weight: bold;
+        .add_button:hover {
+            background-color: #ff9a9a;
         }
 
 </style>

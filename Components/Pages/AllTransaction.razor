@@ -1,12 +1,13 @@
 ﻿@page "/alltransactions"
-@using BudgetTracker.Components.Model
-@inject UserService UserService
-@inject NavigationManager NavigationManager
+    @using BudgetTracker.Components.Model
+    @inject UserService UserService
+    @inject NavigationManager NavigationManager
+    @inject IJSRuntime JSRuntime
 
+<!-- Transaction Page -->
 <div class="transaction_page">
     <div class="transaction_box">
-        <!--For message display-->
-
+        <!-- For message display -->
         @if (isSuccess)
         {
             <p class="success_message">@Message</p>
@@ -16,17 +17,15 @@
             <div class="alert_warning_message">@Message</div>
         }
 
-        <!-- Form for adding new transaction -->
         <h2>Add New Transaction</h2>
         <EditForm Model="newTransact" OnValidSubmit="HandlingTransactSubmit">
             <DataAnnotationsValidator />
             <ValidationSummary />
 
-            <!-- Form for fields -->
-
+            <!-- Transaction Fields and Form -->
             <div class="transaction_form">
                 <label for="transactionType">Transaction Type</label>
-                <InputSelect id="transactionType" @bind-Value="newTransact.Type" class="alltransaction_check" @onchange="OnTransactionTypeChanged">
+                <InputSelect id="transactionType" @bind-Value="newTransact.Type" class="alltransaction_check" @onchange="ChangingTransactionType">
                     <option value="">Select Type</option>
                     <option value="Credit">Credit</option>
                     <option value="Debit">Debit</option>
@@ -49,8 +48,6 @@
                 <InputDate id="date" @bind-Value="newTransact.Date" class="alltransaction_check" />
             </div>
 
-            <!-- Conditional fields for Debt transactions-->
-
             @if (newTransact.Type == "Debt")
             {
                 <div class="transaction_form">
@@ -72,21 +69,16 @@
                 </div>
             }
 
-            <!-- Section for adding tags -->
-
             <div class="transaction_form">
                 <label for="tags">Tags</label>
                 <div class="tag_selection">
                     <div class="custom_tag_input">
-                        <InputText id="customTag"
-                                   @bind-Value="newCustomTag"
-                                   placeholder="Add custom tag"
-                                   class="alltransaction_check" />
+                        <InputText id="customTag" @bind-Value="newCustomTag" placeholder="Add custom tag" class="alltransaction_check" />
                         <button type="button" class="add_tag_button" @onclick="AddingCustomTag">Add Tag</button>
                     </div>
                 </div>
 
-                @if (selectedTags != null && selectedTags.Any())
+                @if (selectedTags?.Any() == true)
                 {
                     <div class="selected_tags">
                         @foreach (var tag in selectedTags)
@@ -100,119 +92,203 @@
                 }
             </div>
 
-
             <div class="transaction_form">
                 <label for="notes">Notes</label>
                 <InputTextArea id="notes" @bind-Value="newTransact.Notes" class="alltransaction_check" />
             </div>
 
+            <!--Buttons for saving and cancelling transactions-->
             <div class="buttons">
                 <button type="submit" class="save_button">Save Transaction</button>
                 <button type="button" class="cancel_button" @onclick="Cancel">Cancel</button>
             </div>
         </EditForm>
+
+        <h2 class="Saving">Saved Transactions</h2>
+
+
+        <!--Sorting date and filtering type fields-->
+        <div class="sort_dropdown">
+            <label for="sortOrder">Sort by Date:</label>
+            <select id="sortOrder" @onchange="SortingDate">
+                <option value="asc">Ascending</option>
+                <option value="desc">Descending</option>
+            </select>
+        </div>
+
+        <div class="sort_dropdown">
+            <label for="transactionTypeFilter">Sort by Type:</label>
+            <select id="transactionTypeFilter" @onchange="FilteringByType">
+                <option value="">All</option>
+                <option value="Credit">Credit</option>
+                <option value="Debit">Debit</option>
+                <option value="Debt">Debt</option>
+            </select>
+        </div>
+
+        <!--For creating a table-->
+        @if (Data.Transactions?.Any() == true)
+        {
+            <table class="transactions_table">
+                <thead>
+                    <tr>
+                        <th>Id</th>
+                        <th>Type</th>
+                        <th>Title</th>
+                        <th>Amount</th>
+                        <th>Date</th>
+                        <th>Tags</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var transaction in sortedTransactions)
+                    {
+                        <tr>
+                            <td>@transaction.Id</td>
+                            <td>@transaction.Type</td>
+                            <td>@transaction.Title</td>
+                            <td>@transaction.Amount</td>
+                            <td>@transaction.Date.ToShortDateString()</td>
+                            <td>
+                                @if (transaction.Tags?.Any() == true)
+                                {
+                                    @foreach (var tag in transaction.Tags)
+                                    {
+                                        <span class="tag">@tag</span>
+                                    }
+                                }
+                                else
+                                {
+                                    <span>No Tags</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <button type="button" class="export_button" @onclick="ExportingToExcel">Export Transactions to Excel</button>
+        }
+        else
+        {
+            <p>No transactions found.</p>
+        }
     </div>
 </div>
 
 @code {
-    // State properties for managing the transaction data and form
-
     private int CurrentUserID { get; set; }
     private string Message = string.Empty;
-    private Transaction newTransact;
-    private string selectedTag = string.Empty;
+    private Transaction newTransact = new Transaction { Date = DateTime.Now, Tags = new List<string>() };
     private AppData Data;
     private bool isSuccess = false;
     private string newCustomTag = string.Empty;
-    private List<string> customTags;
-    private List<string> selectedTags;
+    private List<string> customTags = new List<string>();
+    private List<string> selectedTags = new List<string>();
     private string newDebtSource = string.Empty;
     private string newDebtStatus = "Pending";
     private decimal newPaidAmount = 0m;
+    private List<Transaction> sortedTransactions;
+    private string selectedSortOrder = "asc";
+    private int transactionIdCounter = 0;
+    private string selectedFilterType = string.Empty;
+
+    // Filtering transactions by type
+    private void FilteringByType(ChangeEventArgs e)
+    {
+        selectedFilterType = e.Value.ToString();
+        ApplyFilters();
+    }
+
+    private void ApplyFilters()
+    {
+        var filteredTransactions = Data.Transactions.AsEnumerable();
+
+        if (!string.IsNullOrEmpty(selectedFilterType))
+        {
+            filteredTransactions = filteredTransactions.Where(t => t.Type == selectedFilterType);
+        }
+
+        sortedTransactions = selectedSortOrder == "asc"
+            ? filteredTransactions.OrderBy(t => t.Date).ToList()
+            : filteredTransactions.OrderByDescending(t => t.Date).ToList();
+
+        StateHasChanged();
+    }
 
     protected override void OnInitialized()
     {
-        // Initializing states for transaction and tags
+        Data = UserService.DataUpload() ?? new AppData { Transactions = new List<Transaction>(), Debts = new List<Debt>() };
+        sortedTransactions = Data.Transactions.OrderBy(t => t.Date).ToList();
+        SortingDateDropdown();
+        int maxTransactionId = Data.Transactions.Any() ? Data.Transactions.Max(t => t.Id) : 0;
+        int maxDebtId = Data.Debts.Any() ? Data.Debts.Max(d => d.Id) : 0;
 
-        customTags = new List<string>();
-        selectedTags = new List<string>();
-
-        newTransact = new Transaction
-            {
-                Date = DateTime.Now,
-                UserID = CurrentUserID,
-                Tags = new List<string>()
-            };
-
-        Data = UserService.DataUpload() ?? new AppData();
+        // Set the transactionIdCounter as the maximum ID value from both collections + 1
+        transactionIdCounter = Math.Max(maxTransactionId, maxDebtId) + 1;
     }
 
-    // Event handler for handling transaction
 
-    private void OnTransactionTypeChanged(ChangeEventArgs e)
+    // Sorting transactions by date
+    private void SortingDateDropdown()
+    {
+        sortedTransactions = selectedSortOrder == "asc"
+            ? Data.Transactions.OrderBy(t => t.Date).ToList()
+            : Data.Transactions.OrderByDescending(t => t.Date).ToList();
+        StateHasChanged();
+    }
+
+    private void SortingDate(ChangeEventArgs e)
+    {
+        selectedSortOrder = e.Value.ToString();
+        SortingDateDropdown();
+    }
+
+    private void ChangingTransactionType(ChangeEventArgs e)
     {
         if (newTransact.Type != "Debt")
         {
             newDebtSource = string.Empty;
             newDebtStatus = "Pending";
-            newPaidAmount = 0m; // Clear paid amount when not a debt
+            newPaidAmount = 0m;
         }
     }
 
-    // Adding custom tag to the list
-
     private void AddingCustomTag()
     {
-        if (string.IsNullOrWhiteSpace(newCustomTag))
-            return;
-
-        if (customTags == null)
-            customTags = new List<string>();
-
-        var normalizedNewTag = newCustomTag.Trim();
-
-        if (!customTags.Contains(normalizedNewTag, StringComparer.OrdinalIgnoreCase))
+        if (!string.IsNullOrWhiteSpace(newCustomTag) && !customTags.Contains(newCustomTag.Trim(), StringComparer.OrdinalIgnoreCase))
         {
-            customTags.Add(normalizedNewTag);
-            AddingSelectedTag(normalizedNewTag);
+            customTags.Add(newCustomTag.Trim());
+            AddingSelectedTag(newCustomTag.Trim());
             newCustomTag = string.Empty;
             StateHasChanged();
         }
     }
 
-    // Adding selected tag to the list
-
     private void AddingSelectedTag(string tag)
     {
-        if (string.IsNullOrWhiteSpace(tag))
-            return;
-
-        if (selectedTags == null)
-            selectedTags = new List<string>();
-
-        if (!selectedTags.Contains(tag, StringComparer.OrdinalIgnoreCase))
+        if (!string.IsNullOrWhiteSpace(tag) && !selectedTags.Contains(tag, StringComparer.OrdinalIgnoreCase))
         {
             selectedTags.Add(tag);
-            selectedTag = string.Empty;
             StateHasChanged();
         }
     }
 
-    // Removing a selected tag
     private void RemovingTag(string tag)
     {
-        if (selectedTags != null && !string.IsNullOrWhiteSpace(tag))
-        {
-            selectedTags.Remove(tag);
-            StateHasChanged();
-        }
+        selectedTags.Remove(tag);
+        StateHasChanged();
     }
 
-
-    // Handling the transaction submission
-
+    // Handling all the added transactions
     private async void HandlingTransactSubmit()
     {
+        if (string.IsNullOrWhiteSpace(newTransact.Title))
+        {
+            Message = "Title is required.";
+            isSuccess = false;
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
         if (newTransact.Amount <= 0)
         {
             Message = "Amount should be greater than zero.";
@@ -232,76 +308,89 @@
             newTransact.Tags.AddRange(selectedTags);
         }
 
-
-        if (newTransact.Type == "Credit")
+        try
         {
-            newTransact.Credit = newTransact.Amount;
-            newTransact.Debit = 0;
-            Data.Transactions.Add(newTransact);
-            UserService.StoreData(Data);
-            Message = "Credit transaction added successfully!";
-            isSuccess = true;
-        }
-        else if (newTransact.Type == "Debit")
-        {
-            var userTransactions = Data.Transactions.Where(t => t.UserID == CurrentUserID).ToList();
-            decimal currentBalance = userTransactions.Sum(t => t.Credit - t.Debit);
-
-            if (currentBalance < newTransact.Amount)
+            if (newTransact.Type == "Credit")
             {
-                Message = "Insufficient balance for this transaction.";
-                isSuccess = false;
-            }
-            else
-            {
-                newTransact.Debit = newTransact.Amount;
-                newTransact.Credit = 0;
+                newTransact.Credit = newTransact.Amount;
+                newTransact.Debit = 0;
                 Data.Transactions.Add(newTransact);
                 UserService.StoreData(Data);
-                Message = "Debit transaction added successfully!";
+                Message = "Credit transaction added successfully!";
                 isSuccess = true;
             }
-        }
-        else if (newTransact.Type == "Debt")
-        {
-            // Handling debt data
-            var newDebt = new Debt
+            else if (newTransact.Type == "Debit")
+            {
+                var userTransactions = Data.Transactions.Where(t => t.UserID == CurrentUserID).ToList();
+                decimal currentBalance = userTransactions.Sum(t => t.Credit - t.Debit);
+
+                if (currentBalance < newTransact.Amount)
                 {
-                    UserID = CurrentUserID,
-                    Source = newDebtSource,
-                    Amount = newTransact.Amount,
-                    Status = newDebtStatus,
-                    Tags = newTransact.Tags,
-                    Notes = newTransact.Notes  // Add Notes here
-                };
-
-            // Applying paid amount logic 
-            if (newPaidAmount >= newDebt.Amount)
-            {
-                newDebt.Status = "Paid";
-                newDebt.RemainingAmount = 0;
-                newDebt.PaidAmount = newDebt.Amount; 
-            }
-            else
-            {
-                newDebt.Status = "Pending";
-                newDebt.RemainingAmount = newDebt.Amount - newPaidAmount;
-                newDebt.PaidAmount = newPaidAmount; 
+                    Message = "Insufficient balance for this transaction.";
+                    isSuccess = false;
+                }
+                else
+                {
+                    newTransact.Debit = newTransact.Amount;
+                    newTransact.Credit = 0;
+                    Data.Transactions.Add(newTransact);
+                    UserService.StoreData(Data);
+                    Message = "Debit transaction added successfully!";
+                    isSuccess = true;
+                }
             }
 
-            // Add debt to data
-            Data.Debts.Add(newDebt);
-            UserService.StoreData(Data);
+            else if (newTransact.Type == "Debt")
+            {
+                var newDebt = new Debt
+                    {
+                        Id = transactionIdCounter++,
+                        Source = newDebtSource,
+                        Amount = newTransact.Amount,
+                        Status = newDebtStatus,
+                        Tags = newTransact.Tags,
+                        Notes = newTransact.Notes,
+                        Date = newTransact.Date
+                    };
 
-            Message = "Debt transaction added successfully!";
-            isSuccess = true;
+                if (newPaidAmount >= newDebt.Amount)
+                {
+                    newDebt.Status = "Paid";
+                    newDebt.RemainingAmount = 0;
+                    newDebt.PaidAmount = newDebt.Amount;
+                }
+                else
+                {
+                    newDebt.Status = "Pending";
+                    newDebt.RemainingAmount = newDebt.Amount - newPaidAmount;
+                    newDebt.PaidAmount = newPaidAmount;
+                }
 
-            // Refresh the page after transaction submission
+                Data.Debts.Add(newDebt);
+                Data.Transactions.Add(new Transaction
+                    {
+                        Id = newDebt.Id,
+                        Type = "Debt",
+                        Title = newDebt.Source,
+                        Amount = newDebt.Amount,
+                        Date = newDebt.Date,
+                        Tags = newDebt.Tags,
+                        Notes = newDebt.Notes
+                    });
+                UserService.StoreData(Data);
 
-            await Task.Delay(3000); 
-            NavigationManager.NavigateTo("/mydebt");
+                Message = "Debt transaction added successfully!";
+                isSuccess = true;
+
+                await Task.Delay(3000);
+                NavigationManager.NavigateTo("/mydebt");
+            }
         }
-
+        catch (Exception ex)
+        {
+            Message = $"An error occurred: {ex.Message}";
+            isSuccess = false;
+        }
 
         await InvokeAsync(StateHasChanged);
 
@@ -312,10 +401,28 @@
         }
     }
 
-    // Cancelling and navigate to the appropriate page
-
-    private void Cancel()
+    // Exporting the data of transactions into excel
+    private async Task ExportingToExcel()
     {
+        var transactionData = Data.Transactions.Select(t => new
+        {
+            t.Type,
+            t.Title,
+            Amount = t.Type == "Credit" ? t.Credit : t.Debit,
+            t.Date,
+            Tags = t.Tags != null ? string.Join(", ", t.Tags) : "No Tags",
+        }).ToList();
+
+        var sheet = new
+        {
+            fields = new[] { "Type", "Title", "Amount", "Date", "Tags" },
+            data = transactionData
+        };
+
+        await JSRuntime.InvokeVoidAsync("exportTableToExcel", sheet);
+    }
+
+    private void Cancel() =>
         NavigationManager.NavigateTo(newTransact.Type switch
         {
             "Debit" => "/cashout",
@@ -323,12 +430,29 @@
             "Debt" => "/mydebt",
             _ => "/alltransactions"
         });
-    }
 }
 
-<!--Styles for transaction page and form layout-->
+
+<!--Styles for transaction page-->
 
 <style>
+    .export_button {
+        padding: 10px 20px;
+        background-color: #F87171;
+        color: #ffffff;
+        border: none;
+        border-radius: 5px;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+        display: block;
+        margin: 20px auto 0;
+    }
+
+        .export_button:hover {
+            background-color: #ff9a9a;
+        }
+
     .transaction_page {
         font-family: Arial, sans-serif;
         padding: 20px;
@@ -482,4 +606,53 @@
         margin-bottom: 15px;
         text-align: center;
     }
+
+    .Saving {
+        margin-top: 40px;
+    }
+
+    .transactions_table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 30px;
+        background-color: #f9f9f9;
+    }
+
+        .transactions_table th, .transactions_table td {
+            padding: 12px;
+            border: 1px solid #dddddd;
+            text-align: left;
+        }
+
+        .transactions_table th {
+            background-color: #F87171;
+            color: white;
+        }
+
+        .transactions_table tr:nth-child(even) {
+            background-color: #f3f4f6;
+        }
+
+        .transactions_table tr:hover {
+            background-color: #e2e2e2;
+        }
+
+    .sort_dropdown {
+        margin-bottom: 20px;
+    }
+
+        .sort_dropdown select {
+            padding: 5px;
+            font-size: 14px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            background-color: #f9f9f9;
+        }
+
+        .sort_dropdown label {
+            margin-right: 10px;
+            font-size: 16px;
+            color: #333;
+        }
+
 </style>

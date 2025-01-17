@@ -1,9 +1,10 @@
 ﻿@inject NavigationManager NavigationManager
-
-
-<div class="top-row ps-3 navbar navbar-dark">
+<div class="top-row ps-3 navbar navbar-light">
     <div class="container-fluid">
-        <a class="navbar-brand" href="">BudgetTracker</a>
+        <a class="navbar-logo d-flex align-items-center" href="#">
+            <img src="./budget_logo.png" alt="Logo of the Budget Tracker" class="logo" />
+            <h3>BudgetTracker</h3>
+        </a>
     </div>
 </div>
 
@@ -12,35 +13,35 @@
 <div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
     <nav class="flex-column">
         <div class="nav-item px-3">
-            <NavLink class="nav-link" href= "dashboard">
+            <NavLink class="nav-link" href="dashboard">
                 <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Dashboard
             </NavLink>
         </div>
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="alltransactions">
-                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span>Transaction
+                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Transaction
             </NavLink>
         </div>
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="mydebt">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span>Debts
+                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Debts
             </NavLink>
         </div>
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="cashin">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span>Cash In
+                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Cash In
             </NavLink>
         </div>
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="cashout">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span>Cash Out
+                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Cash Out
             </NavLink>
         </div>
         <div class="nav-item px-3">
             <button class="nav-link btn btn-link text-start px-0" @onclick="Logout">
                 <span class="bi bi-box-arrow-right-nav-menu" aria-hidden="true"></span> Logout
             </button>
-        </div> 
+        </div>
     </nav>
 </div>
 
@@ -50,3 +51,4 @@
         NavigationManager.NavigateTo("/"); // Redirect to login page
     }
 }
+

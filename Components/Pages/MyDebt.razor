@@ -51,25 +51,26 @@
                 <tbody>
                     @foreach (var debt in DebtsFiltering)
                     {
-                        <tr class="@GDRClass(debt)">
+                        <tr class="@PendingClass(debt)">
                             <td>@debt.Id</td>
-                            <td>@debt.GetType().Name</td> <!-- Debt Type -->
-                            <td>@debt.Source</td> <!-- Debt Source -->
-                            <td>@debt.Amount.ToString("C")</td> <!-- Debt Amount -->
+                            <td>@debt.GetType().Name</td>
+                            <td>@debt.Source</td>
+                            <td>@debt.Amount</td>
                             <td>@debt.Date.ToString("MM/dd/yyyy")</td>
-                            <td>@debt.Source</td> <!-- Debt Source -->
+                            <td>@debt.Source</td>
                             <td>@debt.Status</td>
                             <td>@string.Join(", ", debt.Tags)</td>
-                            <td>@debt.Notes</td> <!-- Notes -->
-                            <td class="@GPAClass(debt)">@debt.PaidAmount.ToString("C")</td>
+                            <td>@debt.Notes</td>
+                            <td class="@HighlightingPaidAmountClass(debt)">@debt.PaidAmount.ToString("C")</td>
                             <td>
-                                <button @onclick="() => DeletingDebt(debt)" class="delete_button"><i class="fas fa-trash"></i></button>
+                                <button @onclick="() => DeletingDebt(debt)" class="delete_button">
+                                    <i class="fas fa-trash"></i>
+                                </button>
                             </td>
                         </tr>
                     }
                 </tbody>
             </table>
-
         </div>
 
         <!-- Summary Section -->
@@ -85,7 +86,6 @@
                 </div>
             </div>
         </div>
-
     </div>
 </div>
 
@@ -95,12 +95,13 @@
     private DateTime? startDate;
     private DateTime? endDate;
     private string Message = "";
-
+    private int CurrentUserID;
     private decimal TotalDebt => DebtsFiltering.Sum(d => d.Amount);
-    private decimal RemainingDebt => DebtsFiltering.Sum(d => d.RemainingAmount); // Remaining Debt for Dashboard
+    private decimal RemainingDebt => DebtsFiltering.Sum(d => d.RemainingAmount);
 
     private List<Debt> DebtsFiltering => Data.Debts
-        .Where(d => (string.IsNullOrEmpty(tagFilter) || d.Tags?.Any(t => t.Contains(tagFilter, StringComparison.OrdinalIgnoreCase)) == true) &&
+        .Where(d => d.UserID == CurrentUserID &&  
+                    (string.IsNullOrEmpty(tagFilter) || d.Tags?.Any(t => t.Contains(tagFilter, StringComparison.OrdinalIgnoreCase)) == true) &&
                     (!startDate.HasValue || d.Date >= startDate) &&
                     (!endDate.HasValue || d.Date <= endDate))
         .ToList();
@@ -108,6 +109,8 @@
     protected override void OnInitialized()
     {
         Data = UserService.DataUpload();
+
+        // Updating the debts status and remaining amounts
         foreach (var debt in Data.Debts)
         {
             if (debt.PaidAmount >= debt.Amount)
@@ -123,31 +126,35 @@
         }
     }
 
-
-    // Applying Filtration
+    //Applying filters
     private void ApplyingFilters()
     {
         StateHasChanged();
     }
 
+
+    //Deleting debts
     private void DeletingDebt(Debt debt)
     {
+        if (debt.UserID != CurrentUserID) return; // Ensure only the current user can delete their debts
+
         Data.Debts.Remove(debt);
         UserService.StoreData(Data);
         StateHasChanged();
     }
 
-    private string GDRClass(Debt debt)
+    private string PendingClass(Debt debt)
     {
-        return debt.PaidAmount < debt.Amount ? "pending_debts" : "";
+        return string.Equals(debt.Status, "Pending", StringComparison.OrdinalIgnoreCase) ? "pending_debts" : "";
     }
 
-    private string GPAClass(Debt debt)
+    //Highlighting all the pending amounts rows
+    private string HighlightingPaidAmountClass(Debt debt)
     {
         return debt.PaidAmount < debt.Amount ? "highlight_paid_amount" : "";
     }
 
-
+    //Adding new transactions
     private void AddingTransaction(Debt debt, decimal amount, string notes, string newTag = "")
     {
         var newTransact = new Transaction
@@ -157,32 +164,27 @@
                 Date = DateTime.Now
             };
 
-        // Adding the transaction
         Data.Transactions.Add(newTransact);
 
-        // If a new tag is provided, update the debt's tag list
         if (!string.IsNullOrEmpty(newTag))
         {
             if (debt.Tags == null)
             {
                 debt.Tags = new List<string>();
             }
-            debt.Tags.Add(newTag);  // Add new tag to the debt
+            debt.Tags.Add(newTag);
         }
 
-        // Updating debt's notes and status
         debt.Notes = notes;
         DebtStatusUpdation(debt);
     }
 
     private void DebtStatusUpdation(Debt debt)
     {
-        // Calculate the total paid amount
         debt.PaidAmount = Data.Transactions
-            .Where(t => t.DebtId == debt.Id)
+            .Where(t => t.DebtId == debt.Id) // Correct the relationship by DebtId
             .Sum(t => t.Amount);
 
-        // Updating the status based on the paid amount
         if (debt.PaidAmount >= debt.Amount)
         {
             debt.Status = "Paid";
@@ -194,14 +196,12 @@
             debt.RemainingAmount = debt.Amount - debt.PaidAmount;
         }
 
-        // Saving the updated debt data
         UserService.StoreDebts(Data.Debts);
-
-        // Triggering UI update
         StateHasChanged();
     }
 }
 
+<!--Styles for debt page-->
 <style>
     .highlight_paid_amount {
         background-color: #ff9a9a; 
@@ -209,10 +209,9 @@
     }
 
     .pending_debts {
-        background-color: #fec1c1;
-        color: white;
+        background-color: #fec1c1; 
+        color: #333; 
     }
-
 
     .debt_page h1 {
         color: #FF746C;
@@ -281,9 +280,9 @@
         transition: background-color 0.3s ease;
     }
 
-        .filtration_button:hover {
-            background-color: #ff9a9a;
-        }
+    .filtration_button:hover {
+        background-color: #ff9a9a;
+    }
 
     .debt_table {
         margin-top: 20px;
@@ -295,21 +294,21 @@
         border-collapse: collapse;
     }
 
-        .table th, .table td {
-            padding: 10px;
-            text-align: left;
-            border: 1px solid #ccc;
-            color: #333; /* Ensure text color is dark for readability */
-        }
+    .table th, .table td {
+        padding: 10px;
+        text-align: left;
+        border: 1px solid #ccc;
+        color: #333; /* Ensure text color is dark for readability */
+    }
 
-        .table th {
-            background-color: #f5f5f5;
-            color: #333333;
-        }
+    .table th {
+        background-color: #f5f5f5;
+        color: #333333;
+    }
 
-        .table tr:nth-child(even) {
-            background-color: #f9f9f9;
-        }
+    /* .table tr:nth-child(even) { */
+    /*     background-color: #f9f9f9; */
+    /* } */
 
     .delete_button {
         background: none;
@@ -322,9 +321,9 @@
         justify-content: center;
     }
 
-        .delete_button:hover {
-            color: #ff4d4d;
-        }
+    .delete_button:hover {
+        color: #ff4d4d;
+    }
 
     .summary_section {
         margin-top: 20px;
@@ -343,24 +342,24 @@
         justify-content: space-between;
     }
 
-        .summary_box div {
-            text-align: center;
-            flex: 1;
-            padding: 10px;
-            border-radius: 5px;
-            background-color: #ffffff;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
+    .summary_box div {
+        text-align: center;
+        flex: 1;
+        padding: 10px;
+        border-radius: 5px;
+        background-color: #ffffff;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
 
-        .summary_box h3 {
-            font-size: 1.2rem;
-            color: #555555;
-            margin-bottom: 10px;
-        }
+    .summary_box h3 {
+        font-size: 1.2rem;
+        color: #555555;
+        margin-bottom: 10px;
+    }
 
-        .summary_box p {
-            font-size: 1.5rem;
-            color: #333333;
-            font-weight: bold;
-        }
+    .summary_box p {
+        font-size: 1.5rem;
+        color: #333333;
+        font-weight: bold;
+    }
 </style>

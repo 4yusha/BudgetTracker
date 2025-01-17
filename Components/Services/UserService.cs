@@ -1,13 +1,73 @@
 ﻿using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using BudgetTracker.Components.Model; 
+using BudgetTracker.Components.Model;
+
 public class UserService
 {
     // Paths for storing application data
     private static readonly string DesktopPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
     private static readonly string FolderPath = Path.Combine(DesktopPath, "LocalDB");
     private static readonly string FilePath = Path.Combine(FolderPath, "appdata.json");
+    public string PreferredCurrency { get; set; } = "USD"; // Default currency
+    private static readonly Dictionary<string, decimal> ConversionRates = new Dictionary<string, decimal>
+    {
+        { "USD", 1.0m },
+        { "NPR", 119m },
+        { "INR", 74.5m },
+    };
+
+    // Get the conversion rate for a given currency
+    public decimal ConvertToPreferredCurrency(decimal amount, string preferredCurrency)
+    {
+        if (ConversionRates.TryGetValue(preferredCurrency, out var rate))
+        {
+            return amount * rate;
+        }
+        return amount; // Default to USD if currency not found
+    }
+    // Store the currently logged-in user
+    private User? _loggedInUser;
+
+    // Set the currently logged-in user
+    public void SetLoggedInUser(User user)
+    {
+        _loggedInUser = user;
+    }
+
+    // Get the currently logged-in user
+    public User? GetLoggedInUser()
+    {
+        return _loggedInUser;
+    }
+
+    // Check if a user is logged in
+    public bool IsUserLoggedIn()
+    {
+        return _loggedInUser != null;
+    }
+
+    // Check if the logged-in user is authorized to access a specific username's data
+    public bool IsAuthorizedUser(string username)
+    {
+        return _loggedInUser?.Username == username;
+    }
+
+    // Method to get data of the logged-in user
+    public User GetLoggedInUserData()
+    {
+        var data = DataUpload();
+
+        // Filter the data to only show information for the logged-in user
+        var userData = data.Users.FirstOrDefault(u => u.Username == _loggedInUser?.Username);
+
+        if (userData != null)
+        {
+            return userData;  // Return the data of the logged-in user
+        }
+
+        throw new Exception("User data not found.");
+    }
 
     // Loading AppData from JSON file
     public AppData DataUpload()
@@ -34,33 +94,20 @@ public class UserService
         {
             return new AppData();
         }
-
-
-
     }
 
-    private AppData _data;
-
+    // Store debts data
     public void StoreDebts(IEnumerable<Debt> debts)
     {
-        // Logic to saving the updated debts data 
-
-        _data.Debts = debts.ToList();
-
-        // Saving _data to persistent storage
-
-        StoreData();
+        var data = DataUpload();
+        data.Debts = debts.ToList();
+        StoreData(data);
     }
 
-    private void StoreData()
-    {
-    }
-
-
-    //Resetting amout
+    // Resetting amounts for all transactions and debts
     public void AdjustAmounts()
     {
-        var data = DataUpload(); 
+        var data = DataUpload();
 
         // Reset all transactions
         foreach (var transaction in data.Transactions)
@@ -79,14 +126,6 @@ public class UserService
 
         StoreData(data); // Saving the updated data back to storage
     }
-    public IEnumerable<Debt> GetPendingDebts()
-    {
-        var data = DataUpload(); // Load current data
-
-        // Returning debts 
-
-        return data.Debts.Where(d => d.RemainingAmount > 0);
-    }
 
     // Saving AppData to JSON file
     public void StoreData(AppData data)
@@ -95,22 +134,18 @@ public class UserService
         File.WriteAllText(FilePath, json);
     }
 
-
+    // Load and return the list of users
     public List<User> UsersUpload()
     {
-        // Load AppData and return the Users list
         var appData = DataUpload();
         return appData.Users;
     }
 
+    // Store updated user list
     public void StoreUsers(List<User> users)
     {
-        // Loading the current AppData
         var appData = DataUpload();
-
-        // Updating the Users list
         appData.Users = users;
-        // Save the updating AppData back to the file
         StoreData(appData);
     }
 
@@ -128,13 +163,5 @@ public class UserService
     {
         var hashedInputPassword = PasswordHashing(inputPassword);
         return hashedInputPassword == storedPassword;
-    }
-
-    private void CertifyFolderExists()
-    {
-        if (!Directory.Exists(FolderPath))
-        {
-            Directory.CreateDirectory(FolderPath);
-        }
     }
 }

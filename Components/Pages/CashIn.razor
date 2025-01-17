@@ -26,7 +26,8 @@
             <button @onclick="Applyfiltration" class="filter_button">Filter</button>
         </div>
 
-        <div class="table-responsive">
+        <!--Creating a table for cashin transactions-->
+        <div class="cashin_table">
             <table class="table">
                 <thead>
                     <tr>
@@ -68,7 +69,7 @@
 </div>
 
 @code {
-    [CascadingParameter]
+    // [CascadingParameter]
     private int CurrentUserID { get; set; }
     private AppData Data;
     private DateTime? startDate;
@@ -76,16 +77,13 @@
     private string selectedType = "Credit";  
     private string filterTag = "";
 
-    // ing Loading the data when the component initializes
-
-
+    // Loading the data when the component initializes
     protected override void OnInitialized()
     {
         Data = UserService.DataUpload();
     }
 
     // Filtering transactions based on the current user and selected criteria
-
     private IEnumerable<Transaction> TransactionFiltering
     {
         get
@@ -109,8 +107,6 @@
     }
 
     // Calculating the balance up to a specific transaction
-
-
     private decimal CalculatingBalance(Transaction transaction)
     {
         var previousTransactions = Data.Transactions
@@ -118,32 +114,30 @@
             .ToList();
 
         // Summing up credits and debits for the balance calculation
-
         decimal balance = previousTransactions.Sum(t => t.Credit - t.Debit);
         return balance;
     }
 
 
     //Triggering UI updates after applyig filters
-
     private void Applyfiltration() => StateHasChanged();
 
     private void AddnewTransact() => NavigationManager.NavigateTo("/alltransactions");
 
     // Deleting a transaction
-
     private void DeletingTransaction(Transaction transaction)
     {
         if (transaction.UserID != CurrentUserID) return;
 
         // Removing the transaction from the data and saving the updated state
-
         Data.Transactions.Remove(transaction);
         UserService.StoreData(Data);
         StateHasChanged();
     }
 }
 
+
+<!--Styles for cashin page-->
 <style>
     .cashin_page {
         margin: 20px auto;
@@ -161,7 +155,6 @@
 
         .cashin_box h1 {
             margin-bottom: 20px;
-            font-size: 1.8rem;
             text-align: center;
             color: #F87171;
         }
@@ -200,7 +193,7 @@
             background-color: #ff9a9a;
         }
 
-    .table-responsive {
+    .cashin_table {
         margin-top: 20px;
         overflow-x: auto;
     }

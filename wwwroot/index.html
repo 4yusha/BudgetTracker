@@ -24,6 +24,21 @@
     </div>
 
     <script src="_framework/blazor.webview.js" autostart="false"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.1/xlsx.full.min.js"></script>
+    <script>
+        function exportTableToExcel(sheet) {
+            // Converting the JSON data to a sheet
+            const ws = XLSX.utils.json_to_sheet(sheet.data);
+
+            // Creating a new workbook
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Transactions");
+
+            // Generating Excel file 
+            XLSX.writeFile(wb, "transactions.xlsx");
+        }
+    </script>
+
 
 </body>
 
